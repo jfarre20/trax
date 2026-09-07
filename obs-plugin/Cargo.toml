@@ -1,6 +1,6 @@
 [package]
 name = "trax-obs"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "TRAX now-playing overlay as a native OBS source (Windows)"
 license = "GPL-2.0-or-later"
