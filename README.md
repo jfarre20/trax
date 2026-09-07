@@ -10,6 +10,10 @@ The native plugin reads Windows media sessions directly and runs inside OBS.
 It needs **no Node.js, Python, separate server, API keys, or account**. Settings
 live in the source's Properties dialog.
 
+The plugin itself is Windows-only. On Linux, run the
+[browser-source version](#alternative-local-browser-source-version) instead —
+same overlay, same settings, driven by MPRIS rather than SMTC.
+
 ## Install
 
 **Requirements:** Windows 10 or 11, x64 OBS Studio with Browser Source support.
@@ -185,7 +189,46 @@ This development screenshot tool uses obs-websocket; the plugin itself does not.
 The original Node.js version remains available for a Browser Source URL, a
 web-based configuration page with live preview, or custom badge images.
 
+It is also how TRAX runs on **Linux**, since the native plugin is Windows-only.
+
 See the [browser-source setup guide](docs/browser-source.md) for requirements,
 `npm start`, configuration, and troubleshooting. Those Node/Python and
 obs-websocket instructions apply to that version; the native plugin is installed
 and configured through OBS as described above.
+
+### Install on Linux
+
+TRAX reads **MPRIS** over D-Bus there — the same source `playerctl` and your
+desktop's own media widget use — so Spotify, mpv, VLC, Rhythmbox, Firefox and
+Chromium all work.
+
+Install Node.js 18 or newer, Python 3, and the Python D-Bus bindings:
+
+```bash
+sudo apt install nodejs npm python3-dbus     # Debian, Ubuntu
+sudo dnf install nodejs python3-dbus         # Fedora
+sudo pacman -S nodejs npm python-dbus        # Arch
+```
+
+Then, from a clone of this repository:
+
+```bash
+npm install
+npm start
+```
+
+Add a **Browser Source** in OBS pointing at `http://127.0.0.1:8787/overlay` at
+1920x1080 and 60 fps, then open `http://127.0.0.1:8787/config` to change
+settings. They save instantly and push to every connected overlay, with no need
+to refresh the source. `npm start -- --configure` opens that page on launch.
+
+If the overlay stays blank, run the poller on its own to see what your session
+bus is publishing:
+
+```bash
+python3 nowplaying-linux.py '{}'
+```
+
+It prints one JSON line per second. `python3-dbus is not installed` means the
+bindings are missing; an empty `sessions` list means no player has claimed an
+MPRIS name yet.
