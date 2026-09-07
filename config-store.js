@@ -63,6 +63,7 @@ const SCHEMA = {
     marquee: bool(),
     accent: colour(),
     accent2: colour(),
+    opaqueBackground: bool(),
     panelOpacity: num(0, 1),
     blur: num(0, 40),
     scanlines: num(0, 1),
@@ -114,7 +115,7 @@ function loadDefaults() {
             showProgress: true, showTime: false, showWhenPaused: false,
             retriggerOnResume: true, minPauseSeconds: 30, textCase: 'upper',
             titleMaxLength: 44, marquee: true, accent: '#ff6a00',
-            accent2: '#e01b1b', panelOpacity: 0.86, blur: 6, scanlines: 0.18,
+            accent2: '#e01b1b', opaqueBackground: true, panelOpacity: 0.86, blur: 6, scanlines: 0.18,
             noise: 0.05, shake: 1, fontFamily: 'Arial Narrow, sans-serif',
             artAccent: false, debug: false, preferredApp: '', ignoredApps: []
         };

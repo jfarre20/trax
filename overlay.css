@@ -35,6 +35,7 @@
     --accent: #ff6a00;
     --accent2: #e01b1b;
     --panel-op: 0.86;
+    --plate-op: 1;
     /* Kept so the config schema and saved configs stay valid, but nothing reads
        it any more.
        It used to feed `backdrop-filter` on .plate, for a frosted-glass panel. A
@@ -198,12 +199,10 @@ body.paused .eq i { animation-play-state: paused; height: 7px; filter: saturate(
     padding: 13px 30px 11px 26px;
     /* The sharp diagonal cuts */
     clip-path: polygon(var(--slant) 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
-    background:
-        linear-gradient(157deg,
-            color-mix(in srgb, var(--panel-a) 100%, transparent) 0%,
-            color-mix(in srgb, var(--panel-b) 100%, transparent) 62%,
-            #0b0d11 100%);
-    opacity: var(--panel-op);
+    /* OBS 30's Chromium rejects color-mix(), dropping the entire gradient.
+       These stops are already opaque colors, so use them directly. */
+    background: linear-gradient(157deg, var(--panel-a) 0%, var(--panel-b) 62%, #0b0d11 100%);
+    opacity: var(--plate-op);
     transform: scaleX(0.86);
     transform-origin: left center;
     /* Deliberately no backdrop-filter. See the note on --blur in :root. */
@@ -709,6 +708,10 @@ body.no-progress.no-time.no-source .foot { display: none; }
  * card. This is an alternative to the badge — the panel stays, it just shrinks.
  */
 #card.mini { --art: 42px; }
+/* Reserve the full card's height so shrinking lowers the top edge toward the
+   existing baseline, including in the plugin's top-anchored source rectangle. */
+#card.mini, #card.collapsed { min-height: var(--full-height, 0px); }
+#card.mini .body { align-self: flex-end; }
 #card.mini .badge   { display: none; }
 #card.mini .plate   { padding: 7px 20px 7px 16px; transition: padding calc(300ms / var(--spd)) ease; }
 #card.mini .content { gap: 9px; }

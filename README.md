@@ -70,11 +70,15 @@ All controls are in **TRAX Now Playing → Properties**:
 | Size | Source dimensions, overlay scale, and maximum card width |
 | Timing | Full-card duration, animation speed, mini strip, and pause behavior |
 | Content | Artwork, artist, album, source app, progress, time, and scrolling text |
-| Look | Accent colors, artwork-derived colors, opacity, scanlines, noise, and shake |
+| Look | Accent colors, artwork-derived colors, opaque background, opacity, scanlines, noise, and shake |
 | Exit | Retract completely or collapse to a badge; badge mark, title, and drop |
 | Media source | Follow a particular app or ignore selected apps |
 | Audio | Drive the equalizer from an OBS mixer input |
 | Test | Send a sample track, show or hide the overlay, and display debug details |
+
+**Keep background opaque** is checked by default under **Look**, keeping the
+card's charcoal background solid. Uncheck it to use **Panel opacity**. The area
+outside the card stays transparent.
 
 ### Full card, mini strip, or badge
 
@@ -84,6 +88,7 @@ The full card announces a new track, then stays for **Show for** seconds. Choose
 Enable **Then collapse to mini strip** for a compact panel with artwork, title,
 artist, and optional progress. **Mini strip stays for (0 = forever)** controls
 whether it remains there or continues to the selected exit.
+The strip and badge settle toward the full card's bottom edge as it collapses.
 
 ![TRAX compact strip](docs/screenshot-mini-mode.png)
 

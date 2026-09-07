@@ -410,6 +410,16 @@ test('a partial config keeps defaults for absent keys', () => {
     assert.strictEqual(c.holdSeconds, d.holdSeconds);
 });
 
+test('older configs get an opaque background while an explicit opt-out survives reload', () => {
+    const upgraded = configStore.validate({ panelOpacity: 0.4 });
+    assert.strictEqual(upgraded.opaqueBackground, true);
+    assert.strictEqual(upgraded.panelOpacity, 0.4);
+    const saved = JSON.stringify(configStore.validate({ opaqueBackground: false, panelOpacity: 0.4 }));
+    const reloaded = configStore.validate(JSON.parse(saved));
+    assert.strictEqual(reloaded.opaqueBackground, false);
+    assert.strictEqual(reloaded.panelOpacity, 0.4);
+});
+
 // ============================================================================
 console.log('\n' + (failed ? '✗' : '✓') + ` ${passed} passed, ${failed} failed\n`);
 process.exit(failed ? 1 : 0);

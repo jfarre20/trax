@@ -23,6 +23,7 @@
   "marquee": true,
   "accent": "#ff6a00",
   "accent2": "#e01b1b",
+  "opaqueBackground": true,
   "panelOpacity": 0.86,
   "blur": 6,
   "scanlines": 0.18,

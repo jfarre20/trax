@@ -64,6 +64,7 @@ const KEYS: &[(&str, Kind)] = &[
     ("marquee", Kind::Bool),
     ("accent", Kind::Color),
     ("accent2", Kind::Color),
+    ("opaqueBackground", Kind::Bool),
     ("panelOpacity", Kind::Float),
     ("scanlines", Kind::Float),
     ("noise", Kind::Float),
@@ -338,6 +339,11 @@ pub unsafe fn build_properties(
     g.color("accent", "Accent");
     g.color("accent2", "Accent 2");
     g.bool("artAccent", "Pull accents from artwork");
+    let opaque = g.bool("opaqueBackground", "Keep background opaque");
+    (api().obs_property_set_long_description)(
+        opaque,
+        cs("Keep the music card solid. Uncheck to use Panel opacity. The area outside the card stays transparent.").as_ptr(),
+    );
     g.float("panelOpacity", "Panel opacity", 0.0, 1.0, 0.01, "");
     // No backdrop-blur control: a browser source cannot see the scene behind it,
     // so the filter only ever smeared the card's own artwork. See overlay.css.
@@ -406,6 +412,8 @@ mod tests {
     #[test]
     fn defaults_parse_and_cover_every_key() {
         let d = defaults();
+        assert_eq!(d.get("opaqueBackground"), Some(&Value::Bool(true)));
+        assert!(KEYS.iter().any(|(key, kind)| *key == "opaqueBackground" && matches!(kind, Kind::Bool)));
         for (key, _) in KEYS {
             assert!(d.contains_key(*key), "config.default.json is missing {key}");
         }

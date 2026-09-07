@@ -128,6 +128,8 @@
         root.setProperty('--accent', config.accent);
         root.setProperty('--accent2', config.accent2);
         root.setProperty('--panel-op', String(config.panelOpacity));
+        // Older saved configs do not have this checkbox yet; default it on.
+        root.setProperty('--plate-op', config.opaqueBackground === false ? String(config.panelOpacity) : '1');
         root.setProperty('--blur', config.blur + 'px');
         root.setProperty('--scan', String(config.scanlines));
         root.setProperty('--noise', String(config.noise));
@@ -543,6 +545,9 @@
 
         card.classList.remove('intro', 'enter', 'exit', 'exit-logo', 'hold', 'mini', 'collapsed', 'badge-cycle', 'word-on', 'badge-dropped');
         reflow(card);
+        // Keep the full card's bottom edge through the smaller resting states.
+        // offsetHeight is unscaled, so OBS transforms and overlay Scale still work.
+        card.style.setProperty('--full-height', card.offsetHeight + 'px');
         show();
 
         if (config.exitStyle === 'logo') {
