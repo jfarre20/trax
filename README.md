@@ -4,7 +4,7 @@ An EA TRAX-inspired now-playing overlay for **OBS Studio on Windows**. Install
 the plugin, add a **TRAX Now Playing** source, and let your music announce itself
 with angled panels, racing-style light trails, metallic sweeps, and animated bars.
 
-![TRAX full card showing title, artist, artwork, and playback progress](docs/screenshot-full-card.png)
+![TRAX animation in OBS: the music badge unfolds into a now-playing card, then collapses back into the badge](docs/animation-preview.gif)
 
 The native plugin reads Windows media sessions directly and runs inside OBS.
 It needs **no Node.js, Python, separate server, API keys, or account**. Settings
