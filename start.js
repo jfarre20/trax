@@ -39,7 +39,10 @@ if (!process.env.TRAX_NO_MEDIA) {
 
 // Only open a browser when explicitly asked, so running at startup is silent.
 if (process.argv.includes('--configure')) {
-    setTimeout(() => exec(`start "" "${CONFIG_URL}"`), 1200);
+    const open = process.platform === 'win32'
+        ? `start "" "${CONFIG_URL}"`      // cmd builtin; the empty title arg is required
+        : `xdg-open "${CONFIG_URL}"`;
+    setTimeout(() => exec(open), 1200);
 }
 
 function shutdown() {

@@ -3,16 +3,18 @@
 For the native OBS plugin and Windows installer, see the [main README](../README.md).
 This guide covers the optional local-server version.
 
-An EA Trax-inspired "Now Playing" overlay for OBS, driven by whatever Windows
-itself thinks is playing. Angled glossy panels, fast diagonal wipes, an animated
+An EA Trax-inspired "Now Playing" overlay for OBS, driven by whatever your
+desktop thinks is playing. Angled glossy panels, fast diagonal wipes, an animated
 equalizer, scanlines, and a snap of UI shake on the reveal.
 
 ![Full card](screenshot-full-card.png)
 
-It reads the Windows Global System Media Transport Controls (SMTC) session — the
-same source as the volume OSD — so it works with Spotify, Media Player, browsers,
-MusicBee, foobar2000, and anything else that registers a media session. No screen
-scraping, no API keys, no accounts, nothing leaves your machine.
+On Windows it reads the Global System Media Transport Controls (SMTC) session —
+the same source as the volume OSD — so it works with Spotify, Media Player,
+browsers, MusicBee, foobar2000, and anything else that registers a media session.
+On Linux it reads MPRIS over D-Bus, the same source `playerctl` and the desktop's
+own media widget use, which covers Spotify, mpv, VLC, Rhythmbox and browsers. No
+screen scraping, no API keys, no accounts, nothing leaves your machine.
 
 ## The three states
 
@@ -39,14 +41,21 @@ badge, full → badge. See `Show for` / `Then collapse after` / `When hiding`.
 
 ## Requirements
 
-- Windows 10 or 11
 - [Node.js](https://nodejs.org) 18 or newer
-- Python 3 with `winsdk` (`pip install winsdk`) — **recommended**
+- **Windows 10 or 11:** Python 3 with `winsdk` (`pip install winsdk`) — recommended
+- **Linux:** Python 3 with `python3-dbus` — required
+  (`sudo apt install python3-dbus`, `dnf install python3-dbus`, or
+  `pacman -S python-dbus`)
 
-Python is what reads album art and lets you pin the overlay to a specific app. If
-it's missing, TRAX falls back to a PowerShell poller that still reports title,
-artist, album, artwork and position, but ignores the pinning and ignore-list
-settings. You'll see a line in the console when that happens.
+On Windows, Python is what reads album art and lets you pin the overlay to a
+specific app. If it's missing, TRAX falls back to a PowerShell poller that still
+reports title, artist, album, artwork and position, but ignores the pinning and
+ignore-list settings. You'll see a line in the console when that happens.
+
+On Linux there is no fallback poller — without `python3-dbus` the bridge has
+nothing to read from. Album art works there too, but note that a player which
+publishes only an HTTP artwork URL (Spotify, Chromium) needs network access for
+it, because the overlay will only load artwork inlined as a `data:` URL.
 
 ## Quick start
 
@@ -55,7 +64,8 @@ npm install
 npm start
 ```
 
-Or double-click **`start.bat`**, which installs dependencies on first run.
+On Windows you can instead double-click **`start.bat`**, which installs
+dependencies on first run.
 
 Add a Browser Source in OBS pointing at `http://127.0.0.1:8787/overlay`, and open
 `http://127.0.0.1:8787/config` to change anything. Settings save instantly and
@@ -148,8 +158,9 @@ with it, so it shouldn't ping-pong between idle browser tabs.
 ## Architecture
 
 ```
-nowplaying.py         SMTC poller. Prints one JSON line per second on stdout.
-  (or nowplaying.ps1) Fallback when Python is unavailable.
+nowplaying.py         Media poller. Prints one JSON line per second on stdout.
+  nowplaying.ps1      Windows SMTC, and the fallback when Python is unavailable.
+  nowplaying-linux.py Linux MPRIS over D-Bus.
         |
 media-bridge.js       Supervises the poller. Runs each sample through the
         |             detector, uploads artwork once per track, forwards events.
@@ -271,7 +282,8 @@ already hides the progress bar when duration is zero, which is common for stream
 
 **It follows the wrong app.** Pin it, or add the offender to the ignore list.
 
-**No album art.** Needs the Python poller (`pip install winsdk`). Some apps publish
+**No album art.** Needs the Python poller (`pip install winsdk` on Windows,
+`python3-dbus` on Linux). Some apps publish
 metadata with no thumbnail at all — the overlay falls back to a ♪ glyph.
 
 **The animation replays during a song.** It should be structurally impossible.
@@ -337,8 +349,9 @@ trax/
 ├── obs-bridge.js         obs-websocket audio levels (optional)
 ├── track-change.js       change detection (pure, tested)
 ├── config-store.js       load / validate / save
-├── nowplaying.py         SMTC poller (winsdk)
-├── nowplaying.ps1        SMTC poller fallback
+├── nowplaying.py         SMTC poller, Windows (winsdk)
+├── nowplaying.ps1        SMTC poller fallback, Windows
+├── nowplaying-linux.py   MPRIS poller, Linux (python3-dbus)
 ├── overlay.html/.css/.js the OBS browser source
 ├── config.html/.js       configuration UI
 ├── preview.html          standalone demo, no backend needed

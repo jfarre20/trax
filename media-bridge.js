@@ -1,6 +1,7 @@
-// Windows now-playing -> overlay bridge.
+// Now-playing -> overlay bridge.
 //
-// Spawns the SMTC poller (nowplaying.py, or nowplaying.ps1 if Python is absent),
+// Spawns the platform's poller (nowplaying.py for Windows SMTC, or nowplaying.ps1
+// if Python is absent; nowplaying-linux.py for MPRIS everywhere else),
 // runs each sample through the track-change detector, and forwards the resulting
 // events to server.js over the relay WebSocket.
 //
@@ -236,13 +237,20 @@ setInterval(() => {
 }, STATE_REANNOUNCE_MS);
 
 // --- Poller supervision ------------------------------------------------------
+// Which poller to run: SMTC via winsdk on Windows, MPRIS over D-Bus everywhere
+// else. Both emit the same JSON lines, so nothing above this point cares. Note
+// the interpreter name differs too — most Linux distributions ship no `python`.
+const WINDOWS = process.platform === 'win32';
+const PYTHON = WINDOWS ? 'python' : 'python3';
+const POLLER = WINDOWS ? 'nowplaying.py' : 'nowplaying-linux.py';
+
 let usePython = true;
 let poller = null;
 let restarting = false;
 
 function spawnPoller() {
     if (usePython) {
-        return spawn('python', [path.join(BASE, 'nowplaying.py'), selectionKey || '{}'], { windowsHide: true });
+        return spawn(PYTHON, [path.join(BASE, POLLER), selectionKey || '{}'], { windowsHide: true });
     }
     return spawn('powershell.exe', [
         '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
@@ -255,11 +263,15 @@ function startPoller() {
     const child = poller;
 
     child.on('error', (e) => {
-        if (usePython) {
+        if (usePython && WINDOWS) {
             console.log('[bridge] python unavailable, falling back to PowerShell (no session pinning)');
             usePython = false;
             poller = null;
             startPoller();
+        } else if (usePython) {
+            // Nothing to fall back to off Windows, and a failed spawn emits no
+            // 'exit', so this is terminal until the bridge is restarted.
+            console.error(`[bridge] ${PYTHON} not found on PATH — install Python 3 and python3-dbus`);
         } else {
             console.error('[bridge] poller failed to start:', e.message);
         }

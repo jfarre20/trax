@@ -9,12 +9,13 @@ There is one set of overlay files and two hosts for them.
 
 | | web version (repo root) | OBS plugin (`obs-plugin/`) |
 |---|---|---|
-| Reads Windows media | `nowplaying.py`, `nowplaying.ps1` | `src/smtc.rs` (`windows` crate) |
+| Reads media sessions | SMTC: `nowplaying.py`/`.ps1`; MPRIS: `nowplaying-linux.py` | `src/smtc.rs` (`windows` crate) |
 | Track-change logic | `track-change.js` | `src/detector.rs` (a port, same tests) |
 | State + messages | `media-bridge.js` | `src/bridge.rs` |
 | Transport to page | WebSocket via `server.js` | obs-browser `javascript_event` proc |
 | Config | `config.html` + `config.json` | OBS source properties |
 | Needs | Node + Python | nothing but OBS |
+| Runs on | Windows and Linux | Windows only |
 
 `overlay.html`, `overlay.css` and `overlay.js` are shared verbatim. The plugin
 copies them into its data folder at install time. **Any change to them affects
@@ -75,6 +76,14 @@ the card's own artwork — and because a blur samples pixels from outside its ow
 box, it dragged the leading blade into a wide smear. The `--blur` variable and
 the `blur` config key still exist so saved configs stay valid, but nothing reads
 them. Don't "restore" it.
+
+**A poller's job is to hand over a `data:` URL, not an artwork link.**
+`overlay.js`'s `preloadArt` accepts only `/api/artwork/<hash>` or an inline
+`data:image/...` — anything else is dropped without a word. That is deliberate
+(arbitrary URLs out of track metadata, and a tainted canvas would break the
+accent sampler), so a poller has to fetch and inline the bytes itself. SMTC hands
+over a stream; MPRIS hands over a URL, which is why `nowplaying-linux.py` reads
+`file://` and fetches `http(s)://` — Spotify and Chromium publish only the latter.
 
 **SMTC position is not a clock.** It is whatever the app last pushed via
 `UpdateTimelineProperties`; browsers push once and stop. `LastUpdatedTime` is
