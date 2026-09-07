@@ -8,6 +8,7 @@
   "holdSeconds": 7,
   "animSpeed": 1,
   "compactMode": false,
+  "collapseDirection": "down",
   "alwaysVisible": false,
   "showArt": true,
   "showArtist": true,

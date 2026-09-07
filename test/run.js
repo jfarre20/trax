@@ -344,6 +344,8 @@ test('enums reject values outside the list', () => {
     assert.strictEqual(configStore.validate({ position: 'nowhere' }).position, d.position);
     assert.strictEqual(configStore.validate({ position: 'top-right' }).position, 'top-right');
     assert.strictEqual(configStore.validate({ textCase: 'SHOUTING' }).textCase, d.textCase);
+    assert.strictEqual(configStore.validate({ collapseDirection: 'sideways' }).collapseDirection, 'down');
+    assert.strictEqual(configStore.validate({ collapseDirection: 'up' }).collapseDirection, 'up');
 });
 
 group('config: injection guards');

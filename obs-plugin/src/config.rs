@@ -48,6 +48,7 @@ const KEYS: &[(&str, Kind)] = &[
     ("holdSeconds", Kind::Float),
     ("animSpeed", Kind::Float),
     ("compactMode", Kind::Bool),
+    ("collapseDirection", Kind::Str),
     ("alwaysVisible", Kind::Bool),
     ("showArt", Kind::Bool),
     ("showArtist", Kind::Bool),
@@ -314,6 +315,11 @@ pub unsafe fn build_properties(
     g.float("holdSeconds", "Show for", 0.5, 120.0, 0.5, " s");
     g.float("animSpeed", "Animation speed", 0.25, 4.0, 0.05, "x");
     g.bool("compactMode", "Then collapse to mini strip");
+    let direction = g.list("collapseDirection", "Collapse direction", false, &[("Down (keep bottom edge)", "down"), ("Up (keep top edge)", "up")]);
+    (api().obs_property_set_long_description)(
+        direction,
+        cs("Controls where the mini strip and badge settle relative to the full card.").as_ptr(),
+    );
     g.float("miniSeconds", "Mini strip stays for (0 = forever)", 0.0, 600.0, 1.0, " s");
     g.bool("alwaysVisible", "Always visible");
     g.bool("showWhenPaused", "Stay up while paused");

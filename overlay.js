@@ -152,6 +152,7 @@
         // Position class
         body.className = body.className.replace(/\bpos-[\w-]+/g, '').trim();
         body.classList.add('pos-' + config.position);
+        card.classList.toggle('collapse-up', config.collapseDirection === 'up');
 
         // Text case
         body.classList.remove('case-none', 'case-upper', 'case-lower', 'case-title');

@@ -712,6 +712,11 @@ body.no-progress.no-time.no-source .foot { display: none; }
    existing baseline, including in the plugin's top-anchored source rectangle. */
 #card.mini, #card.collapsed { min-height: var(--full-height, 0px); }
 #card.mini .body { align-self: flex-end; }
+/* The full height stays reserved in both directions. That also makes the
+   setting consistent for OBS sources anchored at either the top or bottom.
+   Down holds the lower edge; up holds the upper edge. */
+#card.collapse-up.mini .body,
+#card.collapse-up.collapsed .badge { align-self: flex-start; }
 #card.mini .badge   { display: none; }
 #card.mini .plate   { padding: 7px 20px 7px 16px; transition: padding calc(300ms / var(--spd)) ease; }
 #card.mini .content { gap: 9px; }

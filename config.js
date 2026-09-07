@@ -26,6 +26,7 @@
         ['timing', 'holdSeconds', 'Show for', 'range', { min: 1, max: 30, step: 0.5, unit: 's', hint: 'How long the full card stays up after a track change.' }],
         ['timing', 'alwaysVisible', 'Show always', 'check', { hint: 'Never hide the card at all. Ignored when mini mode is on.' }],
         ['timing', 'compactMode', 'Collapse to mini strip', 'check', { hint: 'After the hold, shrink to a compact strip and stay. Expands again on the next track.' }],
+        ['timing', 'collapseDirection', 'Collapse direction', 'select', { options: ['down', 'up'], hint: '"down" keeps the full card’s bottom edge fixed. "up" keeps its top edge fixed.' }],
         ['timing', 'miniSeconds', 'Then collapse after', 'range', { min: 0, max: 60, step: 0.5, unit: 's', hint: 'Only with the mini strip. 0 = stay in mini. Otherwise it collapses on to "When hiding" after this long.' }],
         ['timing', 'exitStyle', 'When hiding', 'select', {
             options: ['retract', 'logo'],

@@ -19,6 +19,7 @@ const POSITIONS = [
 const TEXT_CASES = ['none', 'upper', 'lower', 'title'];
 const EXIT_STYLES = ['retract', 'logo'];
 const BADGE_MARKS = ['eq', 'speaker', 'note'];
+const COLLAPSE_DIRECTIONS = ['down', 'up'];
 
 // key -> validator. num(min,max) / bool / str(maxLen) / enum(list)
 const num = (min, max) => (v, d) => {
@@ -47,6 +48,7 @@ const SCHEMA = {
     holdSeconds: num(0.5, 120),
     animSpeed: num(0.25, 4),
     compactMode: bool(),
+    collapseDirection: oneOf(COLLAPSE_DIRECTIONS),
     alwaysVisible: bool(),
     showArt: bool(),
     showArtist: bool(),
@@ -110,7 +112,7 @@ function loadDefaults() {
         defaults = {
             bind: '127.0.0.1', position: 'bottom-left', offsetX: 60, offsetY: 60,
             scale: 1, maxWidth: 620, holdSeconds: 7, animSpeed: 1,
-            compactMode: false, alwaysVisible: false, showArt: true,
+            compactMode: false, collapseDirection: 'down', alwaysVisible: false, showArt: true,
             showArtist: true, showAlbum: false, showSource: true,
             showProgress: true, showTime: false, showWhenPaused: false,
             retriggerOnResume: true, minPauseSeconds: 30, textCase: 'upper',
