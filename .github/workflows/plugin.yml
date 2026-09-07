@@ -1,0 +1,96 @@
+name: OBS plugin
+
+# Builds the Windows plugin and publishes the installable artifacts.
+#
+#   every push / PR touching the plugin -> zip + setup.exe as run artifacts
+#   a v* tag                            -> the same two files on a release
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+    paths:
+      - 'obs-plugin/**'
+      - 'overlay.html'
+      - 'overlay.css'
+      - 'overlay.js'
+      - '.github/workflows/plugin.yml'
+  pull_request:
+    paths:
+      - 'obs-plugin/**'
+      - 'overlay.html'
+      - 'overlay.css'
+      - 'overlay.js'
+  workflow_dispatch:
+
+permissions:
+  contents: write        # needed to attach files to a release
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            obs-plugin/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('obs-plugin/Cargo.lock', 'obs-plugin/Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
+      # The detector, bridge and config plumbing are covered without OBS.
+      - name: Test
+        working-directory: obs-plugin
+        run: cargo test --release
+
+      # The overlay's own unit tests (track-change detection, config schema).
+      - name: Test the overlay
+        run: node test/run.js
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Package
+        working-directory: obs-plugin
+        shell: powershell
+        run: .\build.ps1 package
+
+      - name: Read version
+        id: ver
+        shell: powershell
+        run: |
+          $v = (Get-Content obs-plugin\dist\stage\trax\version.txt -Raw).Trim()
+          "version=$v" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: trax-obs-plugin-${{ steps.ver.outputs.version }}
+          path: |
+            obs-plugin/dist/*.zip
+            obs-plugin/dist/*setup.exe
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            obs-plugin/dist/*.zip
+            obs-plugin/dist/*setup.exe
+          body: |
+            TRAX Now Playing — OBS plugin ${{ steps.ver.outputs.version }}
+
+            **trax-*-setup.exe** — installer, adds an Add/Remove Programs entry.
+            **trax-*-windows-x64.zip** — extract the `trax` folder into
+            `%PROGRAMDATA%\obs-studio\plugins\`.
+
+            Close OBS before installing. Requires Windows 10/11 and OBS Studio 30.x.

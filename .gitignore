@@ -1,0 +1,5 @@
+node_modules/
+# Written at runtime by the config page; config.default.json holds the shipped values.
+config.json
+*.log
+shot.png

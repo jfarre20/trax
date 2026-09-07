@@ -1,0 +1,16 @@
+{
+  "name": "trax",
+  "version": "1.0.0",
+  "description": "EA Trax-inspired Windows now-playing overlay for OBS",
+  "private": true,
+  "main": "start.js",
+  "scripts": {
+    "start": "node start.js",
+    "server": "node server.js",
+    "media": "node media-bridge.js",
+    "test": "node test/run.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

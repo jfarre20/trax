@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TRAX — Configuration</title>
+<style>
+:root {
+    --accent: #ff6a00;
+    --accent2: #e01b1b;
+    --bg: #0d0f13;
+    --panel: #171a20;
+    --panel2: #1e222a;
+    --line: #2a2f39;
+    --text: #e8ebef;
+    --dim: #8b939f;
+    --font: "Bahnschrift Condensed", "Oswald", "Arial Narrow", Segoe UI, sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 Segoe UI, system-ui, sans-serif;
+}
+
+/* ---- header ---- */
+header {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 14px 24px;
+    background: linear-gradient(160deg, #1a1e25, #0d0f13);
+    border-bottom: 1px solid var(--line);
+}
+
+h1 {
+    margin: 0;
+    font-family: var(--font);
+    font-size: 26px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+}
+h1 span { color: var(--accent); }
+
+.urls { margin-left: auto; display: flex; gap: 18px; font-size: 12px; }
+.urls div { color: var(--dim); }
+.urls code {
+    display: block;
+    color: var(--text);
+    font-size: 12px;
+    background: #000;
+    padding: 3px 7px;
+    border-left: 2px solid var(--accent);
+    user-select: all;
+}
+
+#status { font-size: 12px; color: var(--dim); }
+#status b { color: #6ee77f; }
+#status b.bad { color: #ff5a5a; }
+
+/* ---- layout ---- */
+main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 24px;
+    padding: 24px;
+    align-items: start;
+}
+@media (max-width: 1100px) { main { grid-template-columns: 1fr; } }
+
+section {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    margin-bottom: 18px;
+}
+
+section > h2 {
+    margin: 0;
+    padding: 10px 16px;
+    font-family: var(--font);
+    font-size: 15px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--panel2);
+    border-bottom: 1px solid var(--line);
+}
+
+.rows { padding: 6px 16px 14px; }
+
+.row {
+    display: grid;
+    grid-template-columns: 1fr 190px;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.row:last-child { border-bottom: 0; }
+.row label { color: var(--text); }
+.row .hint { display: block; font-size: 11px; color: var(--dim); }
+
+.ctl { display: flex; align-items: center; gap: 8px; justify-content: flex-end; }
+
+input[type=text], input[type=number], select {
+    width: 100%;
+    padding: 5px 8px;
+    background: #0a0c10;
+    color: var(--text);
+    border: 1px solid var(--line);
+    font: inherit;
+    font-size: 13px;
+}
+input:focus, select:focus { outline: 1px solid var(--accent); border-color: var(--accent); }
+
+input[type=range] { width: 118px; accent-color: var(--accent); }
+input[type=color] { width: 40px; height: 26px; padding: 0; background: none; border: 1px solid var(--line); }
+input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--accent); }
+
+.val {
+    min-width: 46px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    color: var(--dim);
+}
+
+/* ---- preview ---- */
+.preview-col { position: sticky; top: 78px; }
+
+#scene {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    /* Checkerboard so overlay transparency is visible, under a mock "scene" */
+    background-image:
+        linear-gradient(135deg, rgba(255, 106, 0, 0.16), rgba(20, 24, 32, 0.9)),
+        repeating-conic-gradient(#2a2f39 0% 25%, #21252c 0% 50%);
+    background-size: auto, 26px 26px;
+}
+
+#scene.plain { background-image: repeating-conic-gradient(#2a2f39 0% 25%, #21252c 0% 50%); background-size: 26px 26px; }
+
+#frame {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 1920px;
+    height: 1080px;
+    border: 0;
+    transform-origin: top left;
+}
+
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px 16px; }
+
+button {
+    padding: 6px 12px;
+    background: var(--panel2);
+    color: var(--text);
+    border: 1px solid var(--line);
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+}
+button:hover { border-color: var(--accent); color: #fff; }
+button.primary { background: linear-gradient(160deg, var(--accent), var(--accent2)); border-color: transparent; color: #fff; font-weight: 600; }
+button.primary:hover { filter: brightness(1.12); }
+
+.note { padding: 0 16px 14px; font-size: 12px; color: var(--dim); }
+.note.warn { color: #ffb14d; }
+
+#toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translate(-50%, 20px);
+    padding: 9px 18px;
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 200ms, transform 200ms;
+    pointer-events: none;
+    z-index: 50;
+}
+#toast.show { opacity: 1; transform: translate(-50%, 0); }
+</style>
+</head>
+<body>
+
+<header>
+    <h1>TR<span>A</span>X</h1>
+    <div id="status">connecting…</div>
+    <div class="urls">
+        <div>OBS Browser Source<code id="overlay-url">http://127.0.0.1:8787/overlay</code></div>
+    </div>
+</header>
+
+<main>
+    <div class="settings-col">
+        <section><h2>Layout</h2><div class="rows" data-group="layout"></div></section>
+        <section><h2>Timing &amp; Behaviour</h2><div class="rows" data-group="timing"></div></section>
+        <section><h2>Content</h2><div class="rows" data-group="content"></div></section>
+        <section><h2>Appearance</h2><div class="rows" data-group="look"></div></section>
+        <section><h2>Audio-Reactive Bars</h2><div class="rows" data-group="audio"></div>
+            <div class="note">Uses obs-websocket volume meters, so the bars follow what is actually going out on stream. This is a level meter, not a spectrum — obs-websocket reports loudness with no frequency breakdown, so the bars move together rather than independently.</div>
+        </section>
+        <section><h2>Media Session</h2><div class="rows" data-group="session"></div>
+            <div class="note" id="session-note">No media sessions detected.</div>
+        </section>
+        <section><h2>Advanced</h2><div class="rows" data-group="advanced"></div>
+            <div class="note warn">Opening to the LAN lets any device on your network view the overlay. Only enable it for a two-PC streaming setup.</div>
+        </section>
+    </div>
+
+    <div class="preview-col">
+        <section>
+            <h2>Live Preview</h2>
+            <div id="scene"><iframe id="frame" src="overlay" title="Overlay preview"></iframe></div>
+            <div class="buttons">
+                <button class="primary" data-test="track">Simulate new track</button>
+                <button data-test="playpause">Toggle play/pause</button>
+                <button data-cmd="show">Replay enter</button>
+                <button data-cmd="hide">Trigger exit</button>
+                <button data-test="noart">Track without artwork</button>
+                <button data-test="long">Very long title</button>
+                <button data-test="unicode">Unicode / Japanese</button>
+                <button data-test="half">Jump progress to 50%</button>
+                <button data-cmd="reconnect">Force WS reconnect</button>
+                <button data-act="scene">Toggle preview backdrop</button>
+                <button data-act="reload">Reload preview</button>
+            </div>
+            <div class="note">The preview is the real overlay at 1920&times;1080, scaled down. It is a live WebSocket client, so anything you see here is exactly what OBS shows.</div>
+        </section>
+
+        <section>
+            <h2>Current Track</h2>
+            <div class="rows"><div class="note" id="np" style="padding:8px 0">—</div></div>
+        </section>
+    </div>
+</main>
+
+<div id="toast"></div>
+<script src="config.js"></script>
+</body>
+</html>

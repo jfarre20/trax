@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TRAX — Standalone Preview</title>
+<style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #0d0f13; font: 13px Segoe UI, sans-serif; }
+    /* A mock scene so the card can be judged against something, plus a
+       checkerboard to make transparency obvious. */
+    #scene {
+        position: fixed;
+        inset: 0;
+        background-image:
+            linear-gradient(135deg, rgba(255, 106, 0, 0.14), rgba(10, 14, 22, 0.94)),
+            repeating-conic-gradient(#2a2f39 0% 25%, #21252c 0% 50%);
+        background-size: auto, 34px 34px;
+    }
+    #frame { position: fixed; inset: 0; width: 100%; height: 100%; border: 0; }
+    #bar {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 5;
+        display: flex; flex-wrap: wrap; gap: 7px; align-items: center;
+        padding: 9px 14px; background: rgba(0, 0, 0, 0.72); color: #e8ebef;
+    }
+    #bar strong { font-family: "Bahnschrift Condensed", "Arial Narrow", sans-serif; letter-spacing: .16em; margin-right: 8px; }
+    #bar strong span { color: #ff6a00; }
+    button {
+        padding: 5px 10px; background: #1e222a; color: #e8ebef;
+        border: 1px solid #2a2f39; font: inherit; font-size: 12px; cursor: pointer;
+    }
+    button:hover { border-color: #ff6a00; }
+    #bar .spacer { margin-left: auto; color: #8b939f; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div id="scene"></div>
+<iframe id="frame" src="overlay.html" title="Overlay"></iframe>
+
+<div id="bar">
+    <strong>TR<span>A</span>X preview</strong>
+    <button data-t="track">New track</button>
+    <button data-t="next">Next track</button>
+    <button data-t="noart">No artwork</button>
+    <button data-t="long">Long title</button>
+    <button data-t="unicode">Unicode</button>
+    <button data-t="playpause">Play / pause</button>
+    <button data-t="half">Progress 50%</button>
+    <button data-t="hide">Exit</button>
+    <span class="spacer">Runs with no backend — drives the overlay directly.</span>
+</div>
+
+<script>
+/* This page needs no server: it reaches into the overlay iframe and calls the
+ * same window.TRAX.handle() that the WebSocket would, so the animation code
+ * under test is identical to production. */
+(function () {
+    const frame = document.getElementById('frame');
+
+    const TRACKS = [
+        { title: 'Riders On The Storm', artist: 'Snoop Dogg vs The Doors', album: 'Need For Speed', sourceApp: 'Spotify', durationSeconds: 244 },
+        { title: 'Get Low', artist: 'Lil Jon & The East Side Boyz', album: 'Kings Of Crunk', sourceApp: 'Chrome', durationSeconds: 218 },
+        { title: 'Rock Superstar', artist: 'Cypress Hill', album: 'Skull & Bones', sourceApp: 'MusicBee', durationSeconds: 260 },
+        { title: 'Bloodline', artist: 'Slayer', album: 'God Hates Us All', sourceApp: 'foobar2000', durationSeconds: 189 }
+    ];
+    let i = 0;
+    let paused = false;
+
+    function api() {
+        return frame.contentWindow && frame.contentWindow.TRAX;
+    }
+
+    function send(msg) {
+        const trax = api();
+        if (!trax) return;
+        trax.handle(Object.assign({ timestamp: new Date().toISOString() }, msg));
+    }
+
+    function track(extra) {
+        const t = Object.assign({}, TRACKS[i % TRACKS.length], extra || {});
+        send(Object.assign({
+            type: 'trackChanged',
+            trackId: 'preview-' + Date.now(),
+            artworkUrl: '',
+            playbackStatus: 'playing',
+            positionSeconds: 0
+        }, t));
+        paused = false;
+    }
+
+    document.addEventListener('click', (e) => {
+        const btn = e.target.closest('button');
+        if (!btn) return;
+        const kind = btn.dataset.t;
+
+        if (kind === 'track') { track(); }
+        else if (kind === 'next') { i++; track(); }
+        else if (kind === 'noart') { track({ album: '', artworkUrl: '' }); }
+        else if (kind === 'long') {
+            track({
+                title: 'This Is An Extremely Long Track Title Intended To Exercise Truncation And The Scrolling Marquee Behaviour',
+                artist: 'An Artist With A Similarly Excessive And Unreasonable Name'
+            });
+        } else if (kind === 'unicode') {
+            track({ title: '極彩色のクロスロード', artist: '中田ヤスタカ feat. きゃりーぱみゅぱみゅ', album: 'ナカタ・コレクション' });
+        } else if (kind === 'playpause') {
+            paused = !paused;
+            send({ type: 'playbackChanged', playbackStatus: paused ? 'paused' : 'playing', resumedAfterPauseSeconds: paused ? 0 : 999 });
+        } else if (kind === 'half') {
+            const t = TRACKS[i % TRACKS.length];
+            send({ type: 'timeline', positionSeconds: t.durationSeconds / 2, durationSeconds: t.durationSeconds });
+        } else if (kind === 'hide') {
+            send({ type: 'hide' });
+        }
+    });
+
+    // The overlay fetches /api/config on load; with no server that fails and it
+    // waits for a config that will never arrive. Supply defaults directly.
+    frame.addEventListener('load', () => {
+        const trax = api();
+        if (!trax) return;
+        fetch('config.default.json')
+            .then((r) => r.json())
+            .then((c) => { trax.applyConfig(c); setTimeout(() => track(), 400); })
+            .catch(() => {
+                // Opened via file:// where fetch is blocked — inline fallback.
+                trax.applyConfig({
+                    position: 'bottom-left', offsetX: 60, offsetY: 60, scale: 1, maxWidth: 620,
+                    holdSeconds: 7, animSpeed: 1, compactMode: false, alwaysVisible: false,
+                    showArt: true, showArtist: true, showAlbum: true, showSource: true,
+                    showProgress: true, showTime: true, showWhenPaused: false,
+                    retriggerOnResume: true, minPauseSeconds: 30, textCase: 'upper',
+                    titleMaxLength: 44, marquee: true, accent: '#ff6a00', accent2: '#e01b1b',
+                    panelOpacity: 0.86, blur: 6, scanlines: 0.18, noise: 0.05, shake: 1,
+                    fontFamily: '"Bahnschrift Condensed","Arial Narrow",sans-serif',
+                    artAccent: false, debug: false
+                });
+                setTimeout(() => track(), 400);
+            });
+    });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,410 @@
+Build a polished browser-based OBS music overlay inspired by the **early-2000s EA Trax presentation style** seen in racing and sports games.
+
+The overlay should read the currently playing song from Windows media playback metadata and display it as an animated “Now Playing” graphic inside OBS.
+
+## Main Goal
+
+Create a local application consisting of:
+
+1. A lightweight Windows background service or desktop helper that reads currently playing media metadata.
+2. A local WebSocket or HTTP server that exposes the current track information.
+3. A transparent HTML/CSS/JavaScript overlay that can be added to OBS as a Browser Source.
+4. A configuration page for customizing appearance, timing, animation, and metadata behavior.
+
+Do not create a static mockup. Build a functional, maintainable project with clear setup instructions.
+
+## Platform
+
+Target:
+
+* Windows 10 and Windows 11
+* OBS Studio Browser Source
+* Chromium-based OBS browser runtime
+* Local-only operation by default
+* No cloud services
+* No account requirement
+* No Electron unless truly necessary
+
+Prefer:
+
+* C#/.NET 8 for the Windows media metadata helper
+* ASP.NET Core minimal API or a lightweight local WebSocket server
+* Vanilla HTML, CSS, and JavaScript for the overlay
+* Vite only if it materially improves development
+* A simple JSON configuration file
+
+## Media Metadata Source
+
+Use the Windows Global System Media Transport Controls APIs to retrieve the active media session.
+
+In C#, investigate and use APIs such as:
+
+* `GlobalSystemMediaTransportControlsSessionManager`
+* `GlobalSystemMediaTransportControlsSession`
+* `TryGetMediaPropertiesAsync()`
+* Playback status and timeline properties
+
+Collect:
+
+* Track title
+* Artist
+* Album
+* Album artwork or thumbnail
+* Application/source name
+* Playback state
+* Current playback position
+* Total duration
+* Whether the track changed
+* Session identifier where available
+
+Support media playing through applications such as:
+
+* Spotify
+* Windows Media Player
+* Media Player
+* Chrome
+* Edge
+* Firefox, when Windows exposes the media session
+* MusicBee
+* VLC, when metadata integration is available
+
+Do not use screen scraping.
+
+Gracefully handle applications that expose incomplete metadata.
+
+## Architecture
+
+Use this approximate structure:
+
+```text
+ea-trax-obs-overlay/
+├── backend/
+│   ├── MediaSessionService.cs
+│   ├── MediaArtworkService.cs
+│   ├── OverlayWebSocket.cs
+│   ├── ConfigurationService.cs
+│   ├── Program.cs
+│   └── backend.csproj
+├── overlay/
+│   ├── index.html
+│   ├── overlay.css
+│   ├── overlay.js
+│   └── assets/
+├── config/
+│   └── overlay-config.json
+├── scripts/
+│   ├── start-overlay.bat
+│   └── install-startup-task.ps1
+├── README.md
+└── .gitignore
+```
+
+The backend should host the overlay and configuration interface locally, for example:
+
+* Overlay: `http://127.0.0.1:8787/overlay`
+* Configuration: `http://127.0.0.1:8787/config`
+* State API: `http://127.0.0.1:8787/api/now-playing`
+* WebSocket: `ws://127.0.0.1:8787/ws`
+
+Bind to localhost by default.
+
+## EA Trax-Inspired Visual Design
+
+Create an original interface inspired by the energy of EA Trax without copying any EA logos, copyrighted interface assets, or exact game UI.
+
+The overlay should feel like:
+
+* Early-2000s racing game
+* PlayStation 2 and original Xbox era
+* Glossy translucent panels
+* Sharp diagonal cuts
+* Fast wipes
+* Metallic surfaces
+* Orange, red, silver, charcoal, and white accents
+* Subtle CRT bloom
+* Motion blur-like transitions
+* Scanlines
+* Animated equalizer bars
+* Slight UI vibration on strong animation beats
+* Digital condensed typography
+* Layered geometric shapes
+* Fast arcade-style presentation
+
+Default layout:
+
+* Appears near the lower-left corner
+* Small animated icon or equalizer enters first
+* A diagonal title card wipes outward
+* Track title appears in large bold text
+* Artist appears underneath
+* Album art appears in a clipped square or angled frame
+* A thin progress bar runs along the bottom
+* Source application can appear in small text
+* The entire card remains visible for a configurable duration
+* It then retracts with a fast reverse wipe
+
+The overlay must have a fully transparent background outside the graphic.
+
+Use CSS animations wherever practical. Avoid heavyweight animation libraries unless needed.
+
+## Animation Sequence
+
+When a new track starts:
+
+1. Detect the metadata change.
+2. Wait for metadata to stabilize for approximately 250–500 milliseconds.
+3. Preload the artwork.
+4. Animate a small orange indicator or equalizer onto the screen.
+5. Slide in the primary angled panel.
+6. Reveal the artwork with a mask or clip-path.
+7. Animate the song title from left to right.
+8. Reveal the artist name shortly afterward.
+9. Animate the progress bar.
+10. Hold for the configured duration.
+11. Retract the text.
+12. Collapse the panel.
+13. Fade or slide out the indicator.
+
+Default total reveal animation should be quick, around 500–900 milliseconds.
+
+Prevent the overlay from repeatedly replaying because of minor timeline updates.
+
+Replay only when:
+
+* Title changes
+* Artist changes
+* Media session changes
+* Playback resumes after a configurable minimum pause
+* The user manually triggers the overlay
+
+## Persistent Mini Mode
+
+Add an optional persistent display mode.
+
+In this mode, show a compact version containing:
+
+* Track title
+* Artist
+* Small artwork
+* Playback progress
+* Animated playback indicator
+
+When the song changes, temporarily expand into the full EA Trax-style card and then collapse back into compact mode.
+
+## Configuration Page
+
+Create a clean local configuration interface with live preview.
+
+Settings should include:
+
+* Overlay position
+* X and Y offsets
+* Scale
+* Maximum width
+* Full-card display duration
+* Animation speed
+* Compact mode
+* Always-visible mode
+* Show album art
+* Show artist
+* Show album
+* Show source application
+* Show progress bar
+* Show elapsed and remaining time
+* Show when paused
+* Trigger again when playback resumes
+* Minimum pause duration before retriggering
+* Text capitalization
+* Title truncation length
+* Scrolling marquee for long titles
+* Accent color
+* Secondary accent color
+* Panel opacity
+* Blur strength
+* Scanline intensity
+* CRT noise intensity
+* UI shake strength
+* Font family
+* Debug mode
+
+Save changes to JSON and broadcast them to connected overlays immediately.
+
+## OBS-Specific Requirements
+
+The overlay must work correctly as an OBS Browser Source.
+
+Document recommended OBS settings:
+
+* URL: `http://127.0.0.1:8787/overlay`
+* Width: 1920
+* Height: 1080
+* Custom FPS: 60
+* Shutdown source when not visible: optional
+* Refresh browser when scene becomes active: off by default
+
+Ensure:
+
+* Transparent background
+* No scrollbars
+* No pointer interactions needed
+* Responsive scaling
+* Correct rendering at 720p, 1080p, and 1440p
+* Reconnection after OBS refreshes the browser source
+* Reconnection after the backend restarts
+* No visible error screen when disconnected
+
+When disconnected, quietly hide the overlay and retry with exponential backoff.
+
+## Artwork Handling
+
+Retrieve album artwork from the Windows media properties when available.
+
+Convert or expose artwork safely through a local endpoint.
+
+Requirements:
+
+* Cache artwork by a stable hash
+* Avoid memory leaks
+* Do not repeatedly retransmit identical image data
+* Use a placeholder when artwork is unavailable
+* Fade smoothly between old and new artwork
+* Support PNG and JPEG
+* Crop with `object-fit: cover`
+* Provide an option to derive accent colors from the artwork
+
+Artwork color extraction can run locally in the browser or backend.
+
+## API State Format
+
+Use a clear state structure similar to:
+
+```json
+{
+  "type": "nowPlaying",
+  "trackId": "stable-generated-id",
+  "title": "Song Title",
+  "artist": "Artist Name",
+  "album": "Album Name",
+  "sourceApp": "Spotify",
+  "artworkUrl": "/api/artwork/abc123",
+  "playbackStatus": "playing",
+  "positionSeconds": 42.5,
+  "durationSeconds": 215.2,
+  "timestamp": "2026-07-26T20:00:00Z"
+}
+```
+
+Send separate event messages for:
+
+* Initial state
+* Track changed
+* Playback changed
+* Timeline synchronization
+* Configuration changed
+* Manual show command
+* Manual hide command
+* Test animation command
+
+Avoid sending timeline updates more frequently than necessary. The browser can interpolate progress locally between synchronization messages.
+
+## Debug and Test Features
+
+Include a debug panel that can:
+
+* Simulate a new track
+* Toggle play and pause
+* Change progress
+* Remove artwork
+* Test very long titles
+* Test Unicode and Japanese text
+* Trigger the enter animation
+* Trigger the exit animation
+* Force WebSocket reconnect
+* Display the raw current media session
+* List all available Windows media sessions
+* Select which media session to follow
+* Choose automatic active-session selection
+
+Add useful structured backend logs.
+
+## Session Selection
+
+Implement sensible active-session selection.
+
+Default behavior:
+
+1. Prefer a session that is currently playing.
+2. Prefer the most recently active session.
+3. Retain the current session while it remains valid.
+4. Do not constantly jump between browser tabs.
+5. Allow the user to pin a preferred application.
+6. Allow ignored applications to be configured.
+
+Store preferred and ignored applications in the config file.
+
+## Security
+
+* Listen only on `127.0.0.1` by default.
+* Do not expose the service to the LAN without an explicit configuration change.
+* Validate config input.
+* Avoid arbitrary file access through artwork routes.
+* Do not execute metadata as HTML.
+* Escape all displayed strings.
+* Do not require administrator privileges for normal use.
+
+## Startup Experience
+
+Provide:
+
+* A one-click `start-overlay.bat`
+* A PowerShell script that can optionally install it as a startup task
+* Clear build and run commands
+* A self-contained Windows publish option
+* Instructions for removing the startup task
+* A health endpoint
+* A tray icon only if it can be implemented cleanly without making the project unnecessarily complicated
+
+On startup, open the configuration page only when launched with a command-line option such as `--configure`.
+
+## Code Quality
+
+* Use asynchronous APIs correctly.
+* Dispose of streams and media resources.
+* Use cancellation tokens.
+* Prevent race conditions when sessions change rapidly.
+* Separate media capture, web transport, config, and overlay rendering.
+* Add comments for unusual Windows API behavior.
+* Avoid giant source files.
+* Include error handling and reconnection logic.
+* Do not leave placeholder functions or pseudocode.
+* Make the first version runnable.
+* Add a small test suite for track-change detection and configuration loading.
+
+## Deliverables
+
+Produce:
+
+1. Complete source code.
+2. Working backend.
+3. Working OBS overlay.
+4. Configuration page with live preview.
+5. Test/debug media controls.
+6. Windows startup scripts.
+7. README with exact setup instructions.
+8. Example screenshots or a standalone preview page.
+9. Sample default configuration.
+10. Troubleshooting section for applications that do not publish Windows media metadata.
+
+Begin by inspecting the current repository. Preserve any useful existing files. Then create an implementation plan in `IMPLEMENTATION.md` and proceed through it without waiting for approval.
+
+After implementation:
+
+* Build the backend.
+* Resolve compilation errors.
+* Launch it locally.
+* Verify the HTTP endpoints.
+* Verify the WebSocket connection.
+* Verify that the overlay works with simulated metadata.
+* Confirm that the overlay background is transparent.
+* Confirm that the animation does not retrigger during ordinary progress updates.
+* Document any Windows media API behavior that could not be tested in the current environment.

@@ -1,0 +1,986 @@
+/* TRAX — EA Trax-inspired now-playing card.
+ *
+ * Everything tunable is a custom property on :root, written by overlay.js from
+ * the config. Timings divide by --spd so one number retunes the whole sequence.
+ *
+ * Layering, from the outside in:
+ *   #stage  position + scale          (never animated)
+ *   #card   shake                     (owns transform)
+ *   .body   the wipe (clip-path inset) + padding for the shear overhang
+ *   .plate  the angled shape (clip-path polygon) + panel fill
+ */
+
+/* Registering the accents as typed colour properties is what makes them
+   animatable — a plain custom property is a string to the engine and snaps to its
+   new value. With @property + a transition on :root, every gradient, glow and
+   shadow derived from them crossfades instead of jumping. Matters most with
+   "derive accents from artwork", where the colour changes on every track. */
+@property --accent {
+    syntax: "<color>";
+    inherits: true;
+    initial-value: #ff6a00;
+}
+@property --accent2 {
+    syntax: "<color>";
+    inherits: true;
+    initial-value: #e01b1b;
+}
+
+:root {
+    transition: --accent var(--accent-fade, 700ms) ease,
+                --accent2 var(--accent-fade, 700ms) ease;
+}
+
+:root {
+    --accent: #ff6a00;
+    --accent2: #e01b1b;
+    --panel-op: 0.86;
+    /* Kept so the config schema and saved configs stay valid, but nothing reads
+       it any more.
+       It used to feed `backdrop-filter` on .plate, for a frosted-glass panel. A
+       browser source cannot see the OBS scene behind it — the page's backdrop is
+       just the page, which is transparent — so the only thing the filter ever had
+       to blur was the card's own artwork. A blur also samples neighbouring pixels
+       from outside its own box, so it dragged the leading blade sideways into a
+       wide smear along the panel's left edge. Verified in OBS at 1:1: blur 6
+       smeared the blade, blur 0 left it crisp. Insetting the filtered box did not
+       help, because the sampling reach is what pulls the blade in. */
+    --blur: 6px;
+    --scan: 0.18;
+    --noise: 0.05;
+    --shake: 1;
+    --font: "Bahnschrift Condensed", "Oswald", "Arial Narrow", Impact, sans-serif;
+    --scale: 1;
+    --maxw: 620px;
+    --spd: 1;
+
+    /* Shape */
+    --slant: 24px;        /* horizontal run of the diagonal cuts */
+    --art: 92px;
+
+    /* Panel palette — charcoal gunmetal, silver edges */
+    --panel-a: #23262b;
+    --panel-b: #12141a;
+    --silver: #cfd4db;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: transparent;   /* OBS transparency depends on this staying unset */
+}
+
+body {
+    font-family: var(--font);
+    /* OBS renders at whatever canvas size the source is given; the card scales
+       from a 1080p baseline so 720p and 1440p sources stay proportional. */
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ---------------------------------------------------------------- positioning */
+#stage {
+    position: fixed;
+    display: flex;
+    transform: scale(var(--scale));
+    will-change: transform;
+}
+
+/* Anchor + transform-origin per position, set by the position-* class on body */
+body.pos-top-left     #stage { top: var(--oy); left: var(--ox); transform-origin: top left; }
+body.pos-top-center   #stage { top: var(--oy); left: 50%; transform-origin: top center; margin-left: calc(-0.5 * var(--maxw)); justify-content: center; }
+body.pos-top-right    #stage { top: var(--oy); right: var(--ox); transform-origin: top right; }
+body.pos-middle-left  #stage { top: 50%; left: var(--ox); transform-origin: left center; }
+body.pos-middle-center #stage { top: 50%; left: 50%; transform-origin: center; margin-left: calc(-0.5 * var(--maxw)); justify-content: center; }
+body.pos-middle-right #stage { top: 50%; right: var(--ox); transform-origin: right center; }
+body.pos-bottom-left  #stage { bottom: var(--oy); left: var(--ox); transform-origin: bottom left; }
+body.pos-bottom-center #stage { bottom: var(--oy); left: 50%; transform-origin: bottom center; margin-left: calc(-0.5 * var(--maxw)); justify-content: center; }
+body.pos-bottom-right #stage { bottom: var(--oy); right: var(--ox); transform-origin: bottom right; }
+
+/* Middle rows need a half-height nudge; scale() would distort a translate here,
+   so it goes on #card's wrapper margin instead of #stage's transform. */
+body.pos-middle-left #stage,
+body.pos-middle-center #stage,
+body.pos-middle-right #stage { margin-top: -75px; }
+
+/* Right-anchored positions read better with the card flowing right-to-left */
+body.pos-top-right #card,
+body.pos-middle-right #card,
+body.pos-bottom-right #card { flex-direction: row-reverse; }
+
+/* ---------------------------------------------------------------------- card */
+#card {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    /* Hidden until the first track arrives, and while disconnected. No error
+       state is ever painted — the overlay simply is not there. */
+    visibility: hidden;
+}
+#card.visible { visibility: visible; }
+
+/* ------------------------------------------------------------------ equalizer */
+.eq {
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    height: auto;
+    padding: 0 2px 14px 0;
+    opacity: 0;
+    transform: translateX(-14px);
+}
+
+.eq i {
+    display: block;
+    width: 5px;
+    height: 10px;
+    background: linear-gradient(to top, var(--accent2), var(--accent));
+    box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 70%, transparent);
+    transform-origin: bottom;
+}
+
+/* Five bars, staggered so it reads as a level meter rather than a wave */
+.eq i:nth-child(1) { animation: eqbar 620ms  -80ms  infinite ease-in-out alternate; }
+.eq i:nth-child(2) { animation: eqbar 480ms  -260ms infinite ease-in-out alternate; }
+.eq i:nth-child(3) { animation: eqbar 720ms  -120ms infinite ease-in-out alternate; }
+.eq i:nth-child(4) { animation: eqbar 540ms  -400ms infinite ease-in-out alternate; }
+.eq i:nth-child(5) { animation: eqbar 660ms  -200ms infinite ease-in-out alternate; }
+
+@keyframes eqbar {
+    from { height: 6px; }
+    to   { height: 30px; }
+}
+
+/* When real audio levels are driving the bars, JS owns their height. */
+body.audio-reactive .eq i { animation: none; }
+
+/* Paused: bars freeze low and desaturate */
+body.paused .eq i { animation-play-state: paused; height: 7px; filter: saturate(0.25); }
+
+/* --------------------------------------------------------------------- .body */
+.body {
+    position: relative;
+    /* The plate's diagonal cuts overhang this box; pad so the wipe's clip
+       rectangle does not shave the points off. */
+    padding: 0 var(--slant);
+    max-width: var(--maxw);
+    /* Start fully wiped away */
+    clip-path: inset(0 100% 0 0);
+}
+
+/* Leading orange blade, sits just inside the padding.
+   The element has to be `--slant + thickness` wide, not `thickness` wide: the
+   polygon's top-left vertex is inset by the full slant, so a narrower box makes
+   that vertex land outside it and the blade renders as a tapered sliver. */
+.edge {
+    --edge-w: 8px;
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 5px;
+    width: calc(var(--slant) + var(--edge-w));
+    background: linear-gradient(to bottom, var(--accent), var(--accent2));
+    clip-path: polygon(var(--slant) 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 60%, transparent));
+    transform: scaleY(0);
+    transform-origin: bottom;
+}
+
+/* -------------------------------------------------------------------- .plate */
+.plate {
+    position: relative;
+    overflow: hidden;
+    padding: 13px 30px 11px 26px;
+    /* The sharp diagonal cuts */
+    clip-path: polygon(var(--slant) 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
+    background:
+        linear-gradient(157deg,
+            color-mix(in srgb, var(--panel-a) 100%, transparent) 0%,
+            color-mix(in srgb, var(--panel-b) 100%, transparent) 62%,
+            #0b0d11 100%);
+    opacity: var(--panel-op);
+    transform: scaleX(0.86);
+    transform-origin: left center;
+    /* Deliberately no backdrop-filter. See the note on --blur in :root. */
+}
+
+/* Glossy top highlight — the early-2000s wet-plastic read */
+.gloss {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 46%;
+    background: linear-gradient(to bottom,
+        rgba(255, 255, 255, 0.16),
+        rgba(255, 255, 255, 0.05) 60%,
+        transparent);
+    pointer-events: none;
+}
+
+/* Faint diagonal hatch, brushed-metal suggestion */
+.hatch {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(115deg,
+        rgba(255, 255, 255, 0.035) 0 1px,
+        transparent 1px 7px);
+    pointer-events: none;
+}
+
+/* Light travels inside the plate so every effect composites cleanly over OBS.
+   These use transforms and opacity, including on older OBS Chromium builds. */
+.speed-lines, .panel-sweep, .race-rail { position: absolute; pointer-events: none; }
+.speed-lines { inset: 0; overflow: hidden; }
+.speed-lines i {
+    position: absolute;
+    left: -65%;
+    top: 22%;
+    width: 60%;
+    height: 1px;
+    opacity: 0;
+    background: linear-gradient(90deg, transparent, var(--accent), #fff);
+    box-shadow: 0 0 6px var(--accent);
+}
+.speed-lines i:nth-child(2) { top: 52%; width: 42%; }
+.speed-lines i:nth-child(3) { top: 81%; width: 54%; }
+.panel-sweep {
+    inset: 0;
+    z-index: 3;
+    opacity: 0;
+    background: linear-gradient(110deg, transparent 34%, rgba(255,255,255,.035) 44%,
+        rgba(255,255,255,.22) 49.5%, rgba(255,255,255,.5) 50%, transparent 51%);
+    transform: translateX(-110%);
+}
+.race-rail {
+    top: 0;
+    left: var(--slant);
+    right: 0;
+    height: 2px;
+    z-index: 4;
+    background: linear-gradient(90deg, var(--accent), var(--accent2) 48%, transparent 90%);
+    transform-origin: left;
+}
+.race-rail::after {
+    content: "";
+    position: absolute;
+    top: 7px;
+    right: 19px;
+    width: 36px;
+    height: 6px;
+    opacity: .6;
+    background: repeating-linear-gradient(115deg, transparent 0 5px, var(--accent) 5px 8px);
+}
+.art::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    border-top: 1px solid rgba(255,255,255,.6);
+    border-bottom: 2px solid var(--accent);
+    opacity: .65;
+}
+.bar-fill::after {
+    content: "";
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 12px;
+    background: linear-gradient(90deg, transparent, #fff);
+}
+
+@keyframes speed-line {
+    0% { opacity: 0; transform: translateX(0); }
+    16% { opacity: .8; }
+    75% { opacity: .4; }
+    100% { opacity: 0; transform: translateX(400%); }
+}
+@keyframes panel-sweep {
+    0% { opacity: 0; transform: translateX(-110%); }
+    20% { opacity: .8; }
+    75% { opacity: .5; }
+    100% { opacity: 0; transform: translateX(110%); }
+}
+/* One quiet sweep per eight seconds; the held card stays easy to read. */
+@keyframes idle-sweep {
+    0%, 78% { opacity: 0; transform: translateX(-110%); }
+    82% { opacity: .24; }
+    97%, 100% { opacity: 0; transform: translateX(110%); }
+}
+@keyframes signal-pulse {
+    0%, 100% { opacity: .5; transform: rotate(45deg) scale(.8); }
+    45% { opacity: 1; transform: rotate(45deg) scale(1); }
+}
+@keyframes art-lock {
+    0% { opacity: 0; transform: translateX(-24px) rotate(-9deg) scale(1.16); }
+    68% { opacity: 1; transform: translateX(2px) rotate(1deg) scale(.98); }
+    100% { opacity: 1; transform: translateX(0) rotate(0) scale(1); }
+}
+@keyframes title-lock {
+    0% { opacity: 0; transform: translateX(28px) skewX(-9deg); }
+    65% { opacity: 1; transform: translateX(-2px) skewX(1deg); }
+    100% { opacity: 1; transform: translateX(0) skewX(0); }
+}
+
+/* --------------------------------------------------------------- CRT overlays */
+.scan {
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(to bottom,
+        rgba(0, 0, 0, 0.85) 0 1px,
+        transparent 1px 3px);
+    opacity: var(--scan);
+    mix-blend-mode: multiply;
+    pointer-events: none;
+}
+
+.noise {
+    position: absolute;
+    inset: -50%;
+    opacity: var(--noise);
+    pointer-events: none;
+    /* Static fractal-noise tile; stepping background-position is far cheaper at
+       60 fps than re-running feTurbulence every frame. */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+    animation: grain 700ms steps(4) infinite;
+}
+
+@keyframes grain {
+    0%   { transform: translate(0, 0); }
+    25%  { transform: translate(-3%, 2%); }
+    50%  { transform: translate(2%, -3%); }
+    75%  { transform: translate(-2%, -2%); }
+    100% { transform: translate(0, 0); }
+}
+
+/* ------------------------------------------------------------------- content */
+.content {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    z-index: 2;
+}
+
+/* ----------------------------------------------------------------- album art */
+.art {
+    position: relative;
+    flex: 0 0 auto;
+    width: var(--art);
+    height: var(--art);
+    overflow: hidden;
+    background: linear-gradient(135deg, #3a3f47, #16181d);
+    /* Angled frame, echoing the plate cuts at a steeper angle */
+    clip-path: polygon(11px 0, 100% 0, calc(100% - 11px) 100%, 0 100%);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+    /* Revealed by its own clip-path wipe */
+    --art-wipe: 100%;
+}
+
+.art-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    opacity: 0;
+    /* Crossfade between old and new artwork */
+    transition: opacity 320ms ease;
+}
+.art-layer.shown { opacity: 1; }
+
+.art-fallback {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: calc(var(--art) * 0.42);
+    color: rgba(255, 255, 255, 0.5);
+    text-shadow: 0 0 12px color-mix(in srgb, var(--accent) 60%, transparent);
+}
+.art.has-image .art-fallback { opacity: 0; }
+
+.art-sheen {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(120deg, transparent 35%, rgba(255, 255, 255, 0.5) 50%, transparent 65%);
+    transform: translateX(-140%);
+    pointer-events: none;
+}
+
+/* ---------------------------------------------------------------------- text */
+.meta {
+    min-width: 0;
+    flex: 1 1 auto;
+}
+
+.kicker {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    color: var(--accent);
+    text-shadow: 0 0 10px color-mix(in srgb, var(--accent) 70%, transparent);
+    margin-bottom: 2px;
+    opacity: 0;
+    transform: translateX(-10px);
+}
+
+.kicker-dot {
+    width: 6px;
+    height: 6px;
+    background: var(--accent);
+    transform: rotate(45deg);
+    box-shadow: 0 0 8px var(--accent);
+}
+
+/* Marquee scaffolding, shared by title / artist / album.
+   The wrapper clips; the track scrolls. Keeping the animation off the text
+   element means it never fights the enter/exit animations, which target the text
+   element directly. */
+.mq-wrap { overflow: hidden; }
+.mq-track { display: block; }
+
+.mq-wrap.scrolling > .mq-track {
+    display: inline-block;
+    width: max-content;
+    /* alternate: scroll out, hold, scroll back — a one-way loop that snaps to the
+       start reads as a glitch on stream. */
+    animation: marquee var(--mq-dur, 9s) ease-in-out infinite alternate;
+}
+
+@keyframes marquee {
+    0%, 12%   { transform: translateX(0); }
+    88%, 100% { transform: translateX(calc(-1 * var(--mq, 0px))); }
+}
+
+.title-wrap {
+    /* Own wipe, independent of the plate's */
+    clip-path: inset(0 100% 0 0);
+}
+
+.title {
+    font-size: 34px;
+    font-weight: 700;
+    line-height: 1.06;
+    letter-spacing: 0.005em;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    /* Subtle CRT bloom on the brightest element */
+    text-shadow:
+        0 0 1px rgba(255, 255, 255, 0.9),
+        0 0 14px rgba(255, 255, 255, 0.28),
+        0 2px 0 rgba(0, 0, 0, 0.55);
+    transform: translateX(-20px);
+}
+
+/* Emoji are colour glyphs, so a text-shadow paints a visible ring right around
+   their edge instead of a soft glow behind a solid letterform. overlay.js wraps
+   every pictographic run in one of these so the bloom skips it. */
+.emoji {
+    text-shadow: none;
+    /* Keep them from towering over the condensed type they sit next to. */
+    font-size: 0.86em;
+    vertical-align: -0.04em;
+}
+
+.artist {
+    font-size: 19px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--silver);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 1px;
+    opacity: 0;
+    transform: translateX(-16px);
+}
+
+.album {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    color: rgba(207, 212, 219, 0.62);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    opacity: 0;
+    transform: translateX(-14px);
+}
+
+/* ---------------------------------------------------------------- progress */
+.foot {
+    position: relative;
+    z-index: 2;
+    margin-top: 9px;
+}
+
+.bar {
+    position: relative;
+    height: 3px;
+    background: rgba(255, 255, 255, 0.16);
+    overflow: hidden;
+    transform: scaleX(0);
+    transform-origin: left;
+}
+
+.bar-fill {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 0%;
+    background: linear-gradient(to right, var(--accent2), var(--accent));
+    box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 80%, transparent);
+    /* Position updates land ~5 s apart and are interpolated in JS every frame;
+       a short transition smooths the correction when a sync arrives. */
+    transition: width 200ms linear;
+}
+
+.foot-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 5px;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    opacity: 0;
+}
+
+.times { color: rgba(255, 255, 255, 0.55); font-variant-numeric: tabular-nums; }
+.times-sep { opacity: 0.45; margin: 0 4px; }
+
+.source {
+    color: var(--silver);
+    opacity: 0.7;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Visibility toggles driven by config */
+body.no-art .art,
+body.no-artist .artist,
+body.no-album .album,
+body.no-source .source,
+body.no-progress .bar,
+body.no-time .times { display: none; }
+body.no-progress.no-time.no-source .foot { display: none; }
+
+/* ============================================================== ENTER =====
+ * Staged reveal. Delays are authored at --spd:1 and divided by --spd, so
+ * animSpeed 2 halves every delay and duration together.
+ * Total 1040 ms at speed 1, including the final light sweep.
+ */
+#card.enter .eq              { animation: eq-in    calc(240ms / var(--spd)) calc(0ms   / var(--spd)) both cubic-bezier(.2,.9,.25,1); }
+#card.enter .edge            { animation: edge-in  calc(210ms / var(--spd)) calc(90ms  / var(--spd)) both cubic-bezier(.2,.9,.25,1); }
+#card.enter .body            { animation: wipe-in  calc(280ms / var(--spd)) calc(150ms / var(--spd)) both cubic-bezier(.16,.84,.3,1); }
+#card.enter .plate           { animation: plate-in calc(280ms / var(--spd)) calc(150ms / var(--spd)) both cubic-bezier(.16,.84,.3,1); }
+#card.enter                  { animation: shake    calc(260ms / var(--spd)) calc(300ms / var(--spd)) both; }
+#card.enter .art             { animation: art-lock calc(440ms / var(--spd)) calc(260ms / var(--spd)) both cubic-bezier(.2,.8,.25,1); }
+#card.enter .art-sheen       { animation: sheen    calc(460ms / var(--spd)) calc(560ms / var(--spd)) both ease-out; }
+#card.enter .kicker          { animation: slide-in calc(220ms / var(--spd)) calc(350ms / var(--spd)) both cubic-bezier(.2,.9,.25,1); }
+#card.enter .title-wrap      { animation: wipe-in  calc(300ms / var(--spd)) calc(390ms / var(--spd)) both cubic-bezier(.16,.84,.3,1); }
+#card.enter .title           { animation: title-lock calc(400ms / var(--spd)) calc(360ms / var(--spd)) both cubic-bezier(.2,.8,.25,1); }
+#card.enter .artist          { animation: slide-in calc(240ms / var(--spd)) calc(500ms / var(--spd)) both cubic-bezier(.2,.9,.25,1); }
+#card.enter .album           { animation: slide-in calc(240ms / var(--spd)) calc(545ms / var(--spd)) both cubic-bezier(.2,.9,.25,1); }
+#card.enter .bar             { animation: bar-in   calc(300ms / var(--spd)) calc(590ms / var(--spd)) both cubic-bezier(.16,.84,.3,1); }
+#card.enter .foot-row        { animation: fade-in  calc(220ms / var(--spd)) calc(640ms / var(--spd)) both ease-out; }
+#card.enter .race-rail       { animation: bar-in calc(500ms / var(--spd)) calc(200ms / var(--spd)) both cubic-bezier(.16,.84,.3,1); }
+#card.enter .speed-lines i   { animation: speed-line calc(560ms / var(--spd)) calc(190ms / var(--spd)) both ease-out; }
+#card.enter .speed-lines i:nth-child(2) { animation-delay: calc(280ms / var(--spd)); }
+#card.enter .speed-lines i:nth-child(3) { animation-delay: calc(360ms / var(--spd)); }
+#card.enter .panel-sweep     { animation: panel-sweep calc(700ms / var(--spd)) calc(340ms / var(--spd)) both ease-in-out; }
+
+@keyframes eq-in    { from { opacity: 0; transform: translateX(-14px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes edge-in  { from { transform: scaleY(0); }   to { transform: scaleY(1); } }
+@keyframes wipe-in  { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes plate-in { from { transform: scaleX(0.86); }  to { transform: scaleX(1); } }
+@keyframes art-in   { from { clip-path: polygon(11px 0, 11px 0, 0 100%, 0 100%); } to { clip-path: polygon(11px 0, 100% 0, calc(100% - 11px) 100%, 0 100%); } }
+@keyframes sheen    { from { transform: translateX(-140%); } to { transform: translateX(140%); } }
+@keyframes slide-in { from { opacity: 0; transform: translateX(-18px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes fade-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes bar-in   { from { transform: scaleX(0); }    to { transform: scaleX(1); } }
+
+/* The "slight UI vibration on strong animation beats" — fires as the panel
+   slams open, amplitude scaled by config.shake. */
+@keyframes shake {
+    0%   { transform: translate(0, 0); }
+    14%  { transform: translate(calc(-3px * var(--shake)), calc(1px * var(--shake))); }
+    28%  { transform: translate(calc(2px * var(--shake)),  calc(-2px * var(--shake))); }
+    42%  { transform: translate(calc(-2px * var(--shake)), calc(-1px * var(--shake))); }
+    58%  { transform: translate(calc(2px * var(--shake)),  calc(1px * var(--shake))); }
+    74%  { transform: translate(calc(-1px * var(--shake)), 0); }
+    100% { transform: translate(0, 0); }
+}
+
+/* =============================================================== HOLD =====
+ * Steady state: everything at rest, animations settled. Reached by swapping
+ * .enter for .hold, which keeps the end-state without pinning `both` fills.
+ */
+#card.hold .eq,
+#card.hold .kicker,
+#card.hold .artist,
+#card.hold .album,
+#card.hold .foot-row { opacity: 1; transform: translateX(0); }
+#card.hold .edge     { transform: scaleY(1); }
+#card.hold .body     { clip-path: inset(0 0 0 0); }
+#card.hold .plate    { transform: scaleX(1); }
+#card.hold .title-wrap { clip-path: inset(0 0 0 0); }
+#card.hold .title    { transform: translateX(0); }
+#card.hold .bar      { transform: scaleX(1); }
+#card.hold .art      { clip-path: polygon(11px 0, 100% 0, calc(100% - 11px) 100%, 0 100%); }
+#card.hold .panel-sweep { animation: idle-sweep calc(8s / var(--spd)) infinite ease-in-out; }
+#card.hold .kicker-dot { animation: signal-pulse calc(2.4s / var(--spd)) infinite ease-in-out; }
+
+/* =============================================================== INTRO =====
+ * With the "logo" exit, the reveal mirrors the collapse: the logo fades up
+ * centred, drops into the meter's position, and only then does the panel unfold
+ * out of it. One keyframe rather than two stacked animations — both would be
+ * animating transform, and the later one would win and eat the scale.
+ */
+#card.intro .badge { display: flex; animation: badge-intro calc(520ms / var(--spd)) both cubic-bezier(.2,.9,.25,1); }
+#card.intro .eq    { display: none; }
+
+@keyframes badge-intro {
+    0%   { opacity: 0;                transform: translateY(-18px) scale(.55) rotate(-8deg); }
+    48%  { opacity: var(--panel-op);  transform: translateY(-18px) scale(1.08) rotate(2deg); }
+    76%  { opacity: var(--panel-op);  transform: translateY(2px) scale(.98) rotate(0); }
+    100% { opacity: var(--panel-op);  transform: translateY(0) scale(1) rotate(0); }
+}
+
+/* ================================================================ EXIT =====
+ * Unload in reverse order over 880 ms. Artwork folds away before the panel
+ * retracts; the last light sweep follows it back toward the blade.
+ */
+#card.exit .foot-row,
+#card.exit-logo .foot-row   { animation: fade-in  calc(220ms / var(--spd)) calc(20ms  / var(--spd)) both reverse ease-in; }
+#card.exit .bar,
+#card.exit-logo .bar        { animation: bar-in   calc(300ms / var(--spd)) calc(0ms   / var(--spd)) both reverse cubic-bezier(.6,0,.8,.2); }
+#card.exit .album,
+#card.exit-logo .album      { animation: slide-in calc(240ms / var(--spd)) calc(95ms  / var(--spd)) both reverse ease-in; }
+#card.exit .artist,
+#card.exit-logo .artist     { animation: slide-in calc(240ms / var(--spd)) calc(140ms / var(--spd)) both reverse ease-in; }
+#card.exit .title-wrap,
+#card.exit-logo .title-wrap { animation: wipe-in  calc(300ms / var(--spd)) calc(190ms / var(--spd)) both reverse cubic-bezier(.6,0,.8,.2); }
+#card.exit .title,
+#card.exit-logo .title      { animation: slide-in calc(300ms / var(--spd)) calc(190ms / var(--spd)) both reverse cubic-bezier(.6,0,.8,.2); }
+#card.exit .art,
+#card.exit-logo .art        { animation: art-in   calc(280ms / var(--spd)) calc(280ms / var(--spd)) both reverse cubic-bezier(.6,0,.8,.2); }
+#card.exit .kicker,
+#card.exit-logo .kicker     { animation: slide-in calc(220ms / var(--spd)) calc(310ms / var(--spd)) both reverse ease-in; }
+#card.exit .body,
+#card.exit-logo .body       { animation: wipe-in  calc(280ms / var(--spd)) calc(450ms / var(--spd)) both reverse cubic-bezier(.6,0,.8,.2); }
+#card.exit .plate,
+#card.exit-logo .plate      { animation: plate-in calc(280ms / var(--spd)) calc(450ms / var(--spd)) both reverse cubic-bezier(.6,0,.8,.2); }
+
+/* Retracting to nothing also takes the blade and the meter with it. The logo exit
+   keeps both — they carry over into the badge. */
+#card.exit .edge            { animation: edge-in calc(210ms / var(--spd)) calc(580ms / var(--spd)) both reverse ease-in; }
+#card.exit .eq              { animation: eq-in   calc(240ms / var(--spd)) calc(640ms / var(--spd)) both reverse ease-in; }
+#card.exit .panel-sweep,
+#card.exit-logo .panel-sweep { animation: panel-sweep calc(560ms / var(--spd)) both reverse ease-in-out; }
+#card.exit .race-rail,
+#card.exit-logo .race-rail   { animation: bar-in calc(580ms / var(--spd)) both reverse ease-in; }
+#card.exit-logo .edge       { transform: scaleY(1); }
+#card.exit-logo .eq         { opacity: 1; transform: translateX(0); }
+
+/* Deliberately NOT touching the panel's flow during .exit-logo. Taking it out of
+   flow shrinks the card, and since #stage is bottom-anchored the card's top edge
+   drops — which dragged the still-collapsing panel down with it. The panel stays
+   in flow for the whole collapse and is only removed once it is fully gone. */
+
+/* ================================================================ MINI =====
+ * Persistent compact mode: same DOM, smaller everything, no kicker/album/times.
+ * Transitioned rather than keyframed so it can collapse straight from the held
+ * card. This is an alternative to the badge — the panel stays, it just shrinks.
+ */
+#card.mini { --art: 42px; }
+#card.mini .badge   { display: none; }
+#card.mini .plate   { padding: 7px 20px 7px 16px; transition: padding calc(300ms / var(--spd)) ease; }
+#card.mini .content { gap: 9px; }
+#card.mini .kicker,
+#card.mini .album,
+#card.mini .times   { display: none; }
+#card.mini .title   { font-size: 17px; transition: font-size calc(300ms / var(--spd)) ease; }
+#card.mini .artist  { font-size: 13px; transition: font-size calc(300ms / var(--spd)) ease; }
+#card.mini .foot    { margin-top: 5px; }
+#card.mini .art     { transition: width calc(300ms / var(--spd)) ease, height calc(300ms / var(--spd)) ease; }
+#card.mini .eq      { padding-bottom: 8px; }
+#card.mini .eq i    { width: 3px; }
+#card.mini .scan,
+#card.mini .noise   { opacity: calc(var(--scan) * 0.5); }
+
+/* Mini is a resting state, so it has to supply the settled values itself — the
+   .hold rules are not applied here, and without these the elements fall back to
+   their hidden base state (meter at opacity 0, panel fully clipped). */
+#card.mini:not(.enter):not(.exit):not(.exit-logo):not(.intro) .eq,
+#card.mini:not(.enter):not(.exit):not(.exit-logo):not(.intro) .artist,
+#card.mini:not(.enter):not(.exit):not(.exit-logo):not(.intro) .foot-row { opacity: 1; transform: translateX(0); }
+#card.mini:not(.enter):not(.exit):not(.exit-logo):not(.intro) .edge       { transform: scaleY(1); }
+#card.mini:not(.enter):not(.exit):not(.exit-logo):not(.intro) .body       { clip-path: inset(0 0 0 0); }
+#card.mini:not(.enter):not(.exit):not(.exit-logo):not(.intro) .plate      { transform: scaleX(1); }
+#card.mini:not(.enter):not(.exit):not(.exit-logo):not(.intro) .title-wrap { clip-path: inset(0 0 0 0); }
+#card.mini:not(.enter):not(.exit):not(.exit-logo):not(.intro) .title      { transform: translateX(0); }
+#card.mini:not(.enter):not(.exit):not(.exit-logo):not(.intro) .bar        { transform: scaleX(1); }
+#card.mini:not(.enter):not(.exit):not(.exit-logo):not(.intro) .art        { clip-path: polygon(11px 0, 100% 0, calc(100% - 11px) 100%, 0 100%); }
+
+/* ============================================================== BADGE =====
+ * exitStyle "logo": the panel slides out to the left and leaves this angled
+ * speaker (or note) tile behind, instead of the card vanishing entirely.
+ */
+.badge {
+    display: none;
+    position: relative;
+    /* Aligned to the meter's baseline — the same 14px above the card's bottom edge
+       that .eq uses. Because #stage is bottom-anchored, the card's bottom stays
+       put when the panel is removed, so the badge lands on exactly the pixels the
+       bars occupied and nothing shifts vertically in either direction. */
+    align-self: flex-end;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-end;
+    /* No panel tile — the collapsed state is just the blade and the mark, sitting
+       where the meter was. */
+    padding: 0 0 12px 0;
+}
+
+/* The collapsed mark: two parallel slashes followed by the bars, which together
+   read as a stylised "M". The card's own .edge lives inside .body and is clipped
+   away by the collapse, so the slashes are reproduced here on an element that
+   survives into this state.
+
+   The bars therefore sit ~34px right of where .eq had them, so the hand-off
+   shifts horizontally. That is deliberate — it reads as the card gathering
+   leftward into the logo — and it is only horizontal; nothing moves vertically. */
+.badge-row {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+}
+
+.badge-row::before,
+.badge-row::after {
+    content: "";
+    position: absolute;
+    bottom: 6px;
+    height: 46px;
+    width: calc(var(--slant) + 7px);
+    background: linear-gradient(to bottom, var(--accent), var(--accent2));
+    clip-path: polygon(var(--slant) 0, 100% 0, calc(100% - var(--slant)) 100%, 0 100%);
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 55%, transparent));
+}
+.badge-row::before { left: 0; }
+.badge-row::after  { left: 15px; opacity: 0.75; }
+
+#card.collapsed .badge { display: flex; }
+
+/* Assembling the badge, rather than cutting to it.
+ *
+ * Geometry, measured from the card's left edge: the panel's blade sits at +114px
+ * (meter 39 + gap 10 + .body padding 5 -> 54px right of where the first slash
+ * lands at +60), and the meter's bars sit at +60 while the badge puts them at
+ * +106. So both pieces have a real distance to travel: the blade slides left into
+ * the first slash and a second slash peels off it, while the bars slide right to
+ * meet them. The line is continuous instead of vanishing and reappearing. */
+#card.collapsed .badge-row::before { animation: slash-lead calc(400ms / var(--spd)) calc(40ms  / var(--spd)) both cubic-bezier(.34,1.4,.64,1); }
+#card.collapsed .badge-row::after  { animation: slash-peel calc(420ms / var(--spd)) calc(150ms / var(--spd)) both cubic-bezier(.34,1.5,.64,1); }
+#card.collapsed .badge-stack       { animation: stack-slide calc(400ms / var(--spd)) calc(0ms   / var(--spd)) both cubic-bezier(.34,1.4,.64,1); }
+#card.collapsed .badge-title       { animation: title-rise  calc(300ms / var(--spd)) calc(360ms / var(--spd)) both cubic-bezier(.2,.9,.25,1); }
+
+/* Once it has settled, the whole badge — slashes, mark and title together —
+   slides down to tuck into the corner. A transform on the badge itself, so the
+   card's layout box is untouched and nothing else has to move.
+   Driven by a class from JS rather than a delayed keyframe: the delay is a user
+   setting, and a transition is the honest tool for "move once, later". */
+.badge { transition: transform calc(520ms / var(--spd)) cubic-bezier(.25,.9,.3,1); }
+#card.badge-dropped .badge { transform: translateY(var(--badge-drop, 0px)); }
+
+/* Starts where the panel's blade was and slides left into position, stretching
+   slightly on the way as if it were being drawn out. */
+@keyframes slash-lead {
+    from { transform: translateX(54px) scaleY(1.14); }
+    to   { transform: translateX(0)    scaleY(1); }
+}
+
+/* Peels off the first one: same origin, arrives a beat later and settles dimmer,
+   so it reads as a duplicate rather than a second object that was always there. */
+@keyframes slash-peel {
+    from { transform: translateX(39px) scaleY(1.14); opacity: 0; }
+    35%  { opacity: 0.75; }
+    to   { transform: translateX(0)    scaleY(1);    opacity: 0.75; }
+}
+
+/* The bars carry over from the meter, sliding right to sit after the slashes. */
+@keyframes stack-slide {
+    from { transform: translateX(-46px); }
+    to   { transform: translateX(0); }
+}
+
+@keyframes title-rise {
+    from { opacity: 0; transform: translateY(-6px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Once the badge is the resting state the panel is gone for good, and the
+   standalone meter has been absorbed into the badge — the card has collapsed
+   into that spot, so a second set of bars beside it would be redundant. */
+#card.collapsed .body { display: none; }
+#card.collapsed .eq { display: none; }
+
+/* The mark row reserves space on the left for the two slashes. */
+.badge-row { padding-left: 46px; min-height: 34px; }
+
+/* Track title beneath the mark, truncated. Off by default via body.no-badge-title. */
+.badge-title {
+    max-width: 230px;
+    margin-top: 7px;
+    padding-left: 4px;
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    color: var(--silver);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.6);
+}
+body.no-badge-title .badge-title { display: none; }
+
+/* Reveals to spell "Music" off the M-shaped mark, then withdraws before the
+   mark starts cycling. max-width rather than width so it can slide open without
+   needing the text measured. */
+.badge-word {
+    margin-left: 5px;
+    font-size: 27px;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: -0.005em;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    max-width: 0;
+    opacity: 0;
+    text-shadow: 0 0 12px rgba(255, 255, 255, 0.25), 0 2px 0 rgba(0, 0, 0, 0.5);
+    transition: max-width calc(420ms / var(--spd)) cubic-bezier(.2,.9,.25,1),
+                opacity calc(260ms / var(--spd)) ease;
+}
+/* State class deliberately NOT named .badge-word: that is the span's own
+   class, and putting it on #card made the span's rule (max-width:0;
+   opacity:0; overflow:hidden) match the card and blank the whole overlay. */
+#card.word-on .badge-word { max-width: 110px; opacity: 1; }
+
+/* Marks stack on top of each other and crossfade. */
+.badge-stack {
+    position: relative;
+    width: 37px;            /* 5 bars x 5px + 4 gaps x 3px */
+    height: 30px;
+}
+
+.badge-mark {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    transform: scale(0.8);
+    /* The crossfade itself. Long enough to read as a dissolve, not a blink; the
+       scale gives the incoming mark a bit of push instead of a flat fade. */
+    transition: opacity calc(520ms / var(--spd)) ease-in-out,
+                transform calc(520ms / var(--spd)) cubic-bezier(.34,1.4,.64,1);
+    overflow: visible;
+    filter: drop-shadow(0 0 7px color-mix(in srgb, var(--accent) 55%, transparent));
+}
+.badge-mark.on { opacity: 1; transform: scale(1); }
+
+.badge-mark.m-img { object-fit: contain; }
+
+.badge-mark .solid { fill: var(--accent); }
+.badge-mark .wave {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2;
+    stroke-linecap: round;
+}
+/* Waves pulse outward so the speaker does not read as a dead icon */
+.m-speaker .wave-1 { animation: wave-pulse 1.6s ease-in-out infinite; }
+.m-speaker .wave-2 { animation: wave-pulse 1.6s ease-in-out 0.22s infinite; }
+
+@keyframes wave-pulse {
+    0%, 100% { opacity: 0.25; }
+    45%      { opacity: 1; }
+}
+body.paused .badge-mark .wave { animation-play-state: paused; opacity: 0.3; }
+
+/* The bar-graph mark, driven by the same audio levels as the main meter. */
+.m-eq {
+    display: flex;
+    align-items: flex-end;
+    justify-content: flex-start;
+    gap: 3px;               /* same as .eq, so the hand-off is pixel-identical */
+}
+.m-eq i {
+    display: block;
+    width: 5px;
+    height: 8px;
+    background: linear-gradient(to top, var(--accent2), var(--accent));
+    box-shadow: 0 0 6px color-mix(in srgb, var(--accent) 70%, transparent);
+    transform-origin: bottom;
+}
+.m-eq i:nth-child(1) { animation: eqbar 620ms  -80ms  infinite ease-in-out alternate; }
+.m-eq i:nth-child(2) { animation: eqbar 480ms  -260ms infinite ease-in-out alternate; }
+.m-eq i:nth-child(3) { animation: eqbar 720ms  -120ms infinite ease-in-out alternate; }
+.m-eq i:nth-child(4) { animation: eqbar 540ms  -400ms infinite ease-in-out alternate; }
+.m-eq i:nth-child(5) { animation: eqbar 660ms  -200ms infinite ease-in-out alternate; }
+body.audio-reactive .m-eq i { animation: none; }
+body.paused .m-eq i { animation-play-state: paused; }
+
+/* --------------------------------------------------------------- text case */
+body.case-upper .title, body.case-upper .artist, body.case-upper .album { text-transform: uppercase; }
+body.case-lower .title, body.case-lower .artist, body.case-lower .album { text-transform: lowercase; }
+body.case-title .title, body.case-title .artist, body.case-title .album { text-transform: capitalize; }
+
+/* -------------------------------------------------------------------- debug */
+#debug {
+    position: fixed;
+    top: 8px;
+    left: 8px;
+    max-width: 460px;
+    padding: 8px 10px;
+    font: 11px/1.5 Consolas, "Courier New", monospace;
+    color: #9fe870;
+    background: rgba(0, 0, 0, 0.78);
+    border-left: 2px solid var(--accent);
+    white-space: pre-wrap;
+    word-break: break-word;
+    display: none;
+    z-index: 99;
+}
+body.debug #debug { display: block; }
+
+/* Pause ambient motion with playback. Entrance/exit still finish normally. */
+body.paused #card .panel-sweep,
+body.paused #card .kicker-dot { animation-play-state: paused; }
+
+/* Preserve the phase end states and timer contract, but replace spatial motion
+   with a short dissolve. Infinite effects must stay off, including badge bars. */
+@media (prefers-reduced-motion: reduce) {
+    #card, #card * { animation-duration: 1ms !important; animation-delay: 0ms !important; transition-duration: 1ms !important; }
+    #card.enter, #card.intro { animation: fade-in 180ms ease-out both !important; }
+    #card .eq i, #card .m-eq i, #card .noise, #card .wave,
+    #card .kicker-dot, #card .mq-track { animation: none !important; }
+    #card .panel-sweep, #card .speed-lines { display: none; }
+}

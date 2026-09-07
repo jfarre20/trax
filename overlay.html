@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TRAX Overlay</title>
+<link rel="stylesheet" href="overlay.css">
+</head>
+<!-- Transparent by default: nothing paints a background except the card itself,
+     so OBS composites this straight over the scene. Scanlines and CRT noise are
+     deliberately card-local rather than full-frame — a full-frame layer would
+     tint the whole stream, not just the graphic. -->
+<body>
+
+<!-- #stage owns position/scale; #card owns the shake so the two never fight -->
+<div id="stage">
+    <div id="card">
+
+        <!-- Equalizer indicator — enters first, leaves last -->
+        <div class="eq">
+            <i></i><i></i><i></i><i></i><i></i>
+        </div>
+
+        <!-- What the card collapses into when exitStyle is "logo": the panel
+             slides out to the left and leaves this angled speaker tile behind.
+             Swap the mark for your own art with the "Badge image" setting. -->
+        <!-- What the card collapses into when exitStyle is "logo": the slashes
+             and bars read as an "M", with the track title tucked underneath. -->
+        <div class="badge" aria-hidden="true">
+            <div class="badge-row">
+                <!-- Marks are stacked and crossfaded by opacity, so cycling between
+                     them dissolves rather than cutting. -->
+                <div class="badge-stack">
+                    <!-- viewBox cropped to the glyph's own bounds so it fills the stack at the
+                         same visual weight as the bars -->
+                    <svg class="badge-mark m-note" viewBox="5 4 14 16" role="img">
+                        <ellipse class="solid" cx="9" cy="16.8" rx="3.5" ry="2.9" transform="rotate(-18 9 16.8)"/>
+                        <rect class="solid" x="11.5" y="4.4" width="1.9" height="12.6" rx="0.9"/>
+                        <path class="solid" d="M13.4 4.4c2.9.5 5 2.3 5.5 5-1.3-2.1-3.3-2.9-5.5-3z"/>
+                    </svg>
+                    <svg class="badge-mark m-speaker" viewBox="2.5 4.5 17 15" role="img">
+                        <path class="solid" d="M3 9h3.4L11.4 5v14L6.4 15H3z"/>
+                        <path class="wave wave-1" d="M14.4 8.7a5 5 0 0 1 0 6.6"/>
+                        <path class="wave wave-2" d="M17.1 6.1a8.6 8.6 0 0 1 0 11.8"/>
+                    </svg>
+                    <div class="badge-mark m-eq"><i></i><i></i><i></i><i></i><i></i></div>
+                    <img class="badge-mark m-img" alt="">
+                </div>
+                <!-- The slashes + bars read as an "M"; this completes it to "Music"
+                     for a beat before the mark starts cycling. -->
+                <span class="badge-word">usic</span>
+            </div>
+            <div class="badge-title" id="badge-title"></div>
+        </div>
+
+        <!-- .body performs the wipe (clip-path inset); .plate carries the shape -->
+        <div class="body">
+            <div class="edge"></div>
+
+            <div class="plate">
+                <div class="gloss"></div>
+                <div class="hatch"></div>
+                <div class="speed-lines" aria-hidden="true"><i></i><i></i><i></i></div>
+                <div class="panel-sweep" aria-hidden="true"></div>
+                <div class="race-rail" aria-hidden="true"></div>
+
+                <div class="content">
+                    <!-- Two stacked layers so artwork can crossfade instead of
+                         popping when the track changes while the card is up -->
+                    <div class="art">
+                        <img class="art-layer" alt="">
+                        <img class="art-layer" alt="">
+                        <div class="art-fallback">&#9834;</div>
+                        <div class="art-sheen"></div>
+                    </div>
+
+                    <!-- Each text line gets a .mq-wrap (clips) and a .mq-track
+                         (scrolls). The marquee animation lives on the track so it
+                         never collides with the enter/exit animation on the text
+                         element itself. -->
+                    <div class="meta">
+                        <div class="kicker"><span class="kicker-dot"></span><span id="kicker-text">NOW PLAYING</span></div>
+                        <div class="mq-wrap title-wrap"><div class="mq-track"><div id="title" class="title"></div></div></div>
+                        <div class="mq-wrap"><div class="mq-track"><div id="artist" class="artist"></div></div></div>
+                        <div class="mq-wrap"><div class="mq-track"><div id="album" class="album"></div></div></div>
+                    </div>
+                </div>
+
+                <div class="foot">
+                    <div class="bar"><div id="fill" class="bar-fill"></div></div>
+                    <div class="foot-row">
+                        <span id="times" class="times"><span id="elapsed">0:00</span><span class="times-sep">/</span><span id="total">0:00</span></span>
+                        <span id="source" class="source"></span>
+                    </div>
+                </div>
+
+                <!-- CRT layers, clipped to the plate -->
+                <div class="scan" aria-hidden="true"></div>
+                <div class="noise" aria-hidden="true"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="debug"></div>
+
+<script src="overlay.js"></script>
+</body>
+</html>
